@@ -1,8 +1,9 @@
 import Login from "../pages/auth/LoginPage";
-import SelectRole from "../pages/auth/SelectRole";
 import Signup from "../pages/auth/SignupPage";
-import ProtectedRoute from "./ProtectedRoute";
-import RootLayout from "./RootLayout";
+import PrivateRoute from "./PrivateRoute";
+import RootLayout from "../layout/RootLayout";
+import DashboardPage from "../pages/dashboard/DashboardPage";
+import AdminTasksPage from "../pages/tasks/AdminTasksPage";
 
 const routes = [
   {
@@ -10,18 +11,21 @@ const routes = [
     element: <Signup />,
   },
   { path: "/login", element: <Login /> },
-  // { path: "/select-role", element: <SelectRole /> },
   {
     path: "/",
-    element: <ProtectedRoute />,
+    element: <PrivateRoute />,
     children: [
       {
         path: "/",
         element: <RootLayout />,
         children: [
           {
-            path: "/employee",
-            element: "Employee page",
+            index: true,
+            element: <DashboardPage />,
+          },
+          {
+            path: "/tasks",
+            element: <AdminTasksPage />,
           },
         ],
       },

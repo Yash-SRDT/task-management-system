@@ -1,32 +1,35 @@
 import db from "../config/firebase.js";
+import { successResponse, errorResponse } from "../utils/apiResponse.js";
 
 const TASKS = "tasks";
 const USERS = "users";
 
-/**
- * ADMIN: Create Task
- */
+/* ================= CREATE TASK ================= */
 export const createTask = async (req, res) => {
   try {
     const { title, description, assignedUserId } = req.body;
 
     if (!title || !description || !assignedUserId) {
-      return res.status(400).json({ message: "All fields are required" });
+      return errorResponse(res, {
+        statusCode: 400,
+        message: "All fields are required",
+      });
     }
 
     const userDoc = await db.collection(USERS).doc(assignedUserId).get();
     if (!userDoc.exists) {
-      return res.status(404).json({ message: "Assigned user not found" });
+      return errorResponse(res, {
+        statusCode: 404,
+        message: "Assigned user not found",
+      });
     }
-
-    const assignedUserName = userDoc.data().name;
 
     const task = {
       title,
       description,
       status: "Pending",
       assignedUserId,
-      assignedUserName,
+      assignedUserName: userDoc.data().name,
       createdBy: "Admin",
       createdAt: new Date(),
       activity: [
@@ -39,18 +42,17 @@ export const createTask = async (req, res) => {
 
     const docRef = await db.collection(TASKS).add(task);
 
-    res.status(201).json({
+    return successResponse(res, {
+      statusCode: 201,
       message: "Task created successfully",
-      taskId: docRef.id,
+      data: { id: docRef.id },
     });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return errorResponse(res, { message: error.message });
   }
 };
 
-/**
- * ADMIN: Get All Tasks
- */
+/* ================= GET ALL TASKS (ADMIN) ================= */
 export const getAllTasks = async (req, res) => {
   try {
     const snapshot = await db.collection(TASKS).orderBy("createdAt", "desc").get();
@@ -60,41 +62,41 @@ export const getAllTasks = async (req, res) => {
       ...doc.data(),
     }));
 
-    res.json(tasks);
+    return successResponse(res, {
+      message: "Tasks fetched successfully",
+      data: tasks,
+    });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return errorResponse(res, { message: error.message });
   }
 };
 
-/**
- * USER: Get My Tasks
- */
+/* ================= GET MY TASKS (USER) ================= */
 export const getMyTasks = async (req, res) => {
   try {
-    const { userId, role } = req.user;
+    const { userId } = req.user;
 
-    let query = db.collection(TASKS);
-
-    if (role === "user") {
-      query = query.where("assignedUserId", "==", userId);
-    }
-
-    const snapshot = await query.orderBy("createdAt", "desc").get();
+    const snapshot = await db
+      .collection(TASKS)
+      .where("assignedUserId", "==", userId)
+      .orderBy("createdAt", "desc")
+      .get();
 
     const tasks = snapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
     }));
 
-    res.json(tasks);
+    return successResponse(res, {
+      message: "My tasks fetched successfully",
+      data: tasks,
+    });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return errorResponse(res, { message: error.message });
   }
 };
 
-/**
- * ADMIN / USER: Get Task by ID
- */
+/* ================= GET TASK BY ID ================= */
 export const getTaskById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -102,24 +104,31 @@ export const getTaskById = async (req, res) => {
 
     const doc = await db.collection(TASKS).doc(id).get();
     if (!doc.exists) {
-      return res.status(404).json({ message: "Task not found" });
+      return errorResponse(res, {
+        statusCode: 404,
+        message: "Task not found",
+      });
     }
 
     const task = doc.data();
 
     if (role === "user" && task.assignedUserId !== userId) {
-      return res.status(403).json({ message: "Access denied" });
+      return errorResponse(res, {
+        statusCode: 403,
+        message: "Access denied",
+      });
     }
 
-    res.json({ id: doc.id, ...task });
+    return successResponse(res, {
+      message: "Task fetched successfully",
+      data: { id: doc.id, ...task },
+    });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return errorResponse(res, { message: error.message });
   }
 };
 
-/**
- * ADMIN / USER: Update Task Status
- */
+/* ================= UPDATE TASK STATUS ================= */
 export const updateTaskStatus = async (req, res) => {
   try {
     const { id } = req.params;
@@ -127,20 +136,29 @@ export const updateTaskStatus = async (req, res) => {
     const { userId, role } = req.user;
 
     if (!["Pending", "In Progress", "Completed"].includes(status)) {
-      return res.status(400).json({ message: "Invalid status" });
+      return errorResponse(res, {
+        statusCode: 400,
+        message: "Invalid status",
+      });
     }
 
     const ref = db.collection(TASKS).doc(id);
     const doc = await ref.get();
 
     if (!doc.exists) {
-      return res.status(404).json({ message: "Task not found" });
+      return errorResponse(res, {
+        statusCode: 404,
+        message: "Task not found",
+      });
     }
 
     const task = doc.data();
 
     if (role === "user" && task.assignedUserId !== userId) {
-      return res.status(403).json({ message: "Access denied" });
+      return errorResponse(res, {
+        statusCode: 403,
+        message: "Access denied",
+      });
     }
 
     await ref.update({
@@ -154,15 +172,15 @@ export const updateTaskStatus = async (req, res) => {
       ],
     });
 
-    res.json({ message: "Status updated successfully" });
+    return successResponse(res, {
+      message: "Task status updated successfully",
+    });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return errorResponse(res, { message: error.message });
   }
 };
 
-/**
- * ADMIN: Update Task (Edit)
- */
+/* ================= UPDATE TASK (ADMIN) ================= */
 export const updateTask = async (req, res) => {
   try {
     const { id } = req.params;
@@ -172,21 +190,26 @@ export const updateTask = async (req, res) => {
     const doc = await ref.get();
 
     if (!doc.exists) {
-      return res.status(404).json({ message: "Task not found" });
+      return errorResponse(res, {
+        statusCode: 404,
+        message: "Task not found",
+      });
     }
 
     const task = doc.data();
-    let updates = { title, description };
+    const updates = { title, description };
 
     if (assignedUserId && assignedUserId !== task.assignedUserId) {
       const userDoc = await db.collection(USERS).doc(assignedUserId).get();
       if (!userDoc.exists) {
-        return res.status(404).json({ message: "Assigned user not found" });
+        return errorResponse(res, {
+          statusCode: 404,
+          message: "Assigned user not found",
+        });
       }
 
       updates.assignedUserId = assignedUserId;
       updates.assignedUserName = userDoc.data().name;
-
       updates.activity = [
         ...task.activity,
         {
@@ -198,15 +221,15 @@ export const updateTask = async (req, res) => {
 
     await ref.update(updates);
 
-    res.json({ message: "Task updated successfully" });
+    return successResponse(res, {
+      message: "Task updated successfully",
+    });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return errorResponse(res, { message: error.message });
   }
 };
 
-/**
- * ADMIN: Delete Task
- */
+/* ================= DELETE TASK ================= */
 export const deleteTask = async (req, res) => {
   try {
     const { id } = req.params;
@@ -215,13 +238,18 @@ export const deleteTask = async (req, res) => {
     const doc = await ref.get();
 
     if (!doc.exists) {
-      return res.status(404).json({ message: "Task not found" });
+      return errorResponse(res, {
+        statusCode: 404,
+        message: "Task not found",
+      });
     }
 
     await ref.delete();
 
-    res.json({ message: "Task deleted successfully" });
+    return successResponse(res, {
+      message: "Task deleted successfully",
+    });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return errorResponse(res, { message: error.message });
   }
 };

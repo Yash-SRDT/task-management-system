@@ -3,12 +3,14 @@ import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import loginIllustration from "../../assets/checklist.png";
 import type { AppDispatch, RootState } from "../../store/store";
-import { fetchLoggedInUser, loginUser } from "../../store/auth/login-slice";
+import { loginUser } from "../../store/auth/login-slice";
+import { login } from "../../store/auth/auth-slice";
 
 const Login = () => {
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
-  const { isLoading } = useSelector((state: RootState) => state.login);
+
+  const { isLoading, error } = useSelector((state: RootState) => state.login);
 
   const [form, setForm] = useState({
     email: "",
@@ -19,34 +21,36 @@ const Login = () => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  // const handleSubmit = async (e: React.FormEvent) => {
-  //   e.preventDefault();
-  //   const res = await dispatch(loginUser(form));
-
-  //   if (loginUser.fulfilled.match(res)) {
-  //     navigate(res.payload.user.role === "admin" ? "/admin" : "/user");
-  //   }
-  // };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const res = await dispatch(loginUser(form));
+    dispatch(loginUser(form))
+      .unwrap()
+      .then((res) => {
+        // store token + expiration (same as HRMS)
+        const expirationTime = Date.now() + 2 * 60 * 60 * 1000; // 2 hours
 
-    if (loginUser.fulfilled.match(res)) {
-      await dispatch(fetchLoggedInUser());
-      navigate("/"); // let ProtectedRoute decide
-    }
+        dispatch(
+          login({
+            token: res.token,
+            expirationTime,
+          }),
+        );
+        navigate("/");
+      })
+      .catch(() => {
+        // error already handled in slice + toast
+      });
   };
 
   return (
     <div className="min-h-screen flex">
-      {/* LEFT */}
+      {/* LEFT SIDE */}
       <div className="hidden md:flex w-1/2 bg-[#EEF0FF] items-center justify-center">
         <img src={loginIllustration} alt="Login Illustration" className="max-w-md" />
       </div>
 
-      {/* RIGHT */}
+      {/* RIGHT SIDE */}
       <div className="w-full md:w-1/2 flex items-center justify-center px-8">
         <div className="w-full max-w-md">
           <h2 className="text-2xl font-semibold mb-1">Welcome back 👋</h2>
@@ -81,6 +85,8 @@ const Login = () => {
               {isLoading ? "Signing in..." : "Sign in"}
             </button>
           </form>
+
+          {error && <p className="text-sm text-red-500 mt-4">{error}</p>}
 
           <p className="text-sm text-center mt-6">
             Don’t have an account?{" "}
